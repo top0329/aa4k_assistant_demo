@@ -311,6 +311,8 @@
               }
             }
           }
+          //TODO: RAGでPINECONEに質問を投げて情報を返却してもらう、返却された内容をrole: 'system',contentの中身に加えて実行する
+          //TODO: SOURCE DOCUMENTSの中身を画面上に表示する
 
           // Send the results back to OpenAI
           const completion_payload = {
