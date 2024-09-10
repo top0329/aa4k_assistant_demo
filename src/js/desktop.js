@@ -11,7 +11,7 @@
     chatContainer.style.position = 'fixed';
     chatContainer.style.bottom = '20px';
     chatContainer.style.right = '20px';
-    chatContainer.style.width = '700px';  
+    chatContainer.style.width = '700px';
     chatContainer.style.padding = '20px';
     chatContainer.style.backgroundColor = 'white';
     chatContainer.style.borderRadius = '5px';
@@ -82,7 +82,7 @@
   // チャット出力エリアにメッセージを表示
   function displayMessage(container, message, senderType, isMarkdown = false) {
     const messageElement = document.createElement('div');
-  
+
     if (senderType === 'AI') {
       messageElement.style.color = '#ffffff';  // AIメッセージのフォントカラー
       messageElement.style.backgroundColor = '#5a9bd4';  // AIメッセージの背景色を淡い青色に設定
@@ -90,17 +90,17 @@
       messageElement.style.color = '#000000';  // ユーザーメッセージのフォントカラー
       messageElement.style.backgroundColor = '#f1f1f1';  // ユーザーメッセージの背景色
     }
-  
+
     messageElement.style.padding = '10px';
     messageElement.style.borderRadius = '5px';
     messageElement.style.marginBottom = '10px';
-  
+
     if (isMarkdown) {
       messageElement.innerHTML = `<strong>${senderType === 'AI' ? 'AI' : 'You'}:</strong> ` + marked.parse(message);
     } else {
       messageElement.textContent = `${senderType === 'AI' ? 'AI' : 'You'}: ` + message;
     }
-  
+
     container.appendChild(messageElement);
   }
 
@@ -210,6 +210,25 @@
                   additionalProperties: false
                 }
               }
+            },
+            {
+              type: "function",
+              function: {
+                name: "searchRag",
+                description: "Performs a search based on a user query. This function should be used for queries related to Kintone plugins or configuration methods, or when the user's question includes phrases like 'ありますか？' or 'どうすればいいですか？'.",
+                strict: true,
+                parameters: {
+                  type: "object",
+                  properties: {
+                    query: {
+                      type: "string",
+                      description: "The search keyword or phrase to use for the query."
+                    }
+                  },
+                  required: ["query"],
+                  additionalProperties: false
+                }
+              }
             }
           ]
         })
@@ -219,7 +238,7 @@
       console.log(data)
 
       if (data.choices[0].message.content) {
-        displayMessage(chatOutput, data.choices[0].message.content,"AI",true);
+        displayMessage(chatOutput, data.choices[0].message.content, "AI", true);
       }
 
       const toolCalls = data.choices[0].message.tool_calls;
@@ -229,98 +248,117 @@
 
         if (toolCalls && toolCalls.length > 0) {
           for (const toolCall of toolCalls) {
-            const args = JSON.parse(toolCall.function.arguments);
-            const infoTypes = args.info_types;
+            const functionName = toolCall.function.name; // 呼び出す関数の名前を取得
 
-            for (const infoType of infoTypes) {
-              switch (infoType) {
-                case "fields":
-                  results.push(await getFieldInformation());
-                  displayMessage(chatOutput, "フィールド情報が正常に取得されました。","AI", false);
-                  break;
-                case "views":
-                  results.push(await getViewInformation());
-                  displayMessage(chatOutput, "ビュー情報が正常に取得されました。","AI", false);
-                  break;
-                case "process":
-                  results.push(await getProcessManagementSettings());
-                  displayMessage(chatOutput, "プロセス管理情報が正常に取得されました。","AI", false);
-                  break;
-                case "layout":
-                  results.push(await getFormLayout());
-                  displayMessage(chatOutput, "フォームのレイアウト情報が正常に取得されました。","AI", false);
-                  break;
-                case "graph":
-                  results.push(await getGraphSettings());
-                  displayMessage(chatOutput, "アプリのグラフの設定が正常に取得されました。","AI", false);
-                  break;
-                case "general":
-                  results.push(await getGeneralSettings());
-                  displayMessage(chatOutput, "アプリの一般設定が正常に取得されました。","AI", false);
-                  break;
-                case "plugin":
-                  results.push(await getAppPlugins());
-                  displayMessage(chatOutput, "アプリに追加されているプラグインが正常に取得されました。","AI", false);
-                  break;
-                case "generalNotification":
-                  results.push(await getGeneralNotificationSettings());
-                  displayMessage(chatOutput, "アプリの条件通知の設定が正常に取得されました。","AI", false);
-                  break;
-                case "perRecordNotification":
-                  results.push(await getPerRecordNotificationSettings());
-                  displayMessage(chatOutput, "レコードの条件通知の設定が正常に取得されました。","AI", false);
-                  break;
-                case "reminderNotification":
-                  results.push(await getReminderNotificationSettings());
-                  displayMessage(chatOutput, "リマインダーの条件通知の設定が正常に取得されました。","AI", false);
-                  break;
-                case "appPermissions":
-                  results.push(await getAppPermissions());
-                  displayMessage(chatOutput, "アプリのアクセス権の設定が正常に取得されました。","AI", false);
-                  break;
-                case "recordPermissions":
-                  results.push(await getRecordPermissions());
-                  displayMessage(chatOutput, "レコードのアクセス権の設定が正常に取得されました。","AI", false);
-                  break;
-                case "fieldPermissions":
-                  results.push(await getFieldPermissions());
-                  displayMessage(chatOutput, "フィールドのアクセス権の設定が正常に取得されました。","AI", false);
-                  break;
-                case "action":
-                  results.push(await getActionSettings());
-                  displayMessage(chatOutput, "アプリのアクション設定が正常に取得されました。","AI", false);
-                  break;
-                case "adminNotes":
-                  results.push(await getAppAdminNotes());
-                  displayMessage(chatOutput, "アプリの管理者用メモが正常に取得されました。","AI", false);
-                  break;
-                case "app":
-                  results.push(await getApp());
-                  displayMessage(chatOutput, "1件のアプリの情報が正常に取得されました。","AI", false);
-                  break;
-                case "record":
-                  results.push(await getRecord());
-                  displayMessage(chatOutput, "1件のレコードが正常に取得されました。","AI", false);
-                  break;
-                case "records":
-                  results.push(await getRecords());
-                  displayMessage(chatOutput, "複数のレコードが正常に取得されました。","AI", false);
-                  break;
-                default:
-                  console.error('Unknown info type:', infoType);
+            const args = JSON.parse(toolCall.function.arguments);
+            if (functionName === "getKintoneAppInfo") {
+
+              const infoTypes = args.info_types;
+
+              for (const infoType of infoTypes) {
+                switch (infoType) {
+                  case "fields":
+                    results.push(await getFieldInformation());
+                    displayMessage(chatOutput, "フィールド情報が正常に取得されました。", "AI", false);
+                    break;
+                  case "views":
+                    results.push(await getViewInformation());
+                    displayMessage(chatOutput, "ビュー情報が正常に取得されました。", "AI", false);
+                    break;
+                  case "process":
+                    results.push(await getProcessManagementSettings());
+                    displayMessage(chatOutput, "プロセス管理情報が正常に取得されました。", "AI", false);
+                    break;
+                  case "layout":
+                    results.push(await getFormLayout());
+                    displayMessage(chatOutput, "フォームのレイアウト情報が正常に取得されました。", "AI", false);
+                    break;
+                  case "graph":
+                    results.push(await getGraphSettings());
+                    displayMessage(chatOutput, "アプリのグラフの設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "general":
+                    results.push(await getGeneralSettings());
+                    displayMessage(chatOutput, "アプリの一般設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "plugin":
+                    results.push(await getAppPlugins());
+                    displayMessage(chatOutput, "アプリに追加されているプラグインが正常に取得されました。", "AI", false);
+                    break;
+                  case "generalNotification":
+                    results.push(await getGeneralNotificationSettings());
+                    displayMessage(chatOutput, "アプリの条件通知の設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "perRecordNotification":
+                    results.push(await getPerRecordNotificationSettings());
+                    displayMessage(chatOutput, "レコードの条件通知の設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "reminderNotification":
+                    results.push(await getReminderNotificationSettings());
+                    displayMessage(chatOutput, "リマインダーの条件通知の設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "appPermissions":
+                    results.push(await getAppPermissions());
+                    displayMessage(chatOutput, "アプリのアクセス権の設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "recordPermissions":
+                    results.push(await getRecordPermissions());
+                    displayMessage(chatOutput, "レコードのアクセス権の設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "fieldPermissions":
+                    results.push(await getFieldPermissions());
+                    displayMessage(chatOutput, "フィールドのアクセス権の設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "action":
+                    results.push(await getActionSettings());
+                    displayMessage(chatOutput, "アプリのアクション設定が正常に取得されました。", "AI", false);
+                    break;
+                  case "adminNotes":
+                    results.push(await getAppAdminNotes());
+                    displayMessage(chatOutput, "アプリの管理者用メモが正常に取得されました。", "AI", false);
+                    break;
+                  case "app":
+                    results.push(await getApp());
+                    displayMessage(chatOutput, "1件のアプリの情報が正常に取得されました。", "AI", false);
+                    break;
+                  case "record":
+                    results.push(await getRecord());
+                    displayMessage(chatOutput, "1件のレコードが正常に取得されました。", "AI", false);
+                    break;
+                  case "records":
+                    results.push(await getRecords());
+                    displayMessage(chatOutput, "複数のレコードが正常に取得されました。", "AI", false);
+                    break;
+                  default:
+                    console.error('Unknown info type:', infoType);
+                }
+              }
+            } else if (functionName === "searchRag") {
+              const query = args.query; // searchRag用の検索クエリを取得
+              const searchResult = await searchRag(query); // searchRag関数を呼び出し
+
+              if (searchResult) {
+                results.push(searchResult);
+                displayMessage(chatOutput, "検索結果が正常に取得されました。", "AI", false);
+              } else {
+                displayMessage(chatOutput, "検索結果が見つかりませんでした。", "AI", false);
               }
             }
-          }
-          //TODO: RAGでPINECONEに質問を投げて情報を返却してもらう、返却された内容をrole: 'system',contentの中身に加えて実行する
-          //TODO: SOURCE DOCUMENTSの中身を画面上に表示する
 
-          // Send the results back to OpenAI
-          const completion_payload = {
-            model: 'gpt-4o-2024-08-06',
-            messages: [
-              {
-                role: 'system',
-                content: `あなたはKintoneアプリに関する情報を提供する役立つアシスタントです。アプリIDは${kintone.app.getId()}です。ユーザーが実行したい特定のタスクについて、Kintoneでの操作をガイドします。
+
+            // Send the results back to OpenAI
+            const completion_payload = {
+              model: 'gpt-4o-2024-08-06',
+              messages: [
+                {
+                  role: 'system',
+                  content: `
+                #アシスタントの概要  
+                あなたはKintoneアプリに関する情報を提供する役立つアシスタントです。アプリIDは${kintone.app.getId()}です。
+                ユーザーが実行したい特定のタスクや探したいソリューションやプラグイン、設定方法についてkintoneでの操作をガイドおよび解決方法を案内します。
+                操作方法と検索結果のいずれかや両方が含まれる可能性があります。
+
+                ##kintone操作に関連する場合
                 各ステップで実行される操作について詳しく説明し、ユーザーが全体の流れを明確に理解できるようにします。
                 また、ユーザーの入力言語を検出し、その言語で応答を提供することで、ユーザーにとってより親しみやすいコミュニケーションを実現します。
                 フィールドの追加やレコードの更新など、どのような操作が行われるのかを丁寧に説明してください。
@@ -347,60 +385,71 @@
                 - 実行されるメソッド: {method}
                 - リクエストボディの内容: {bodyの要約}
 
-                上記の内容を元に、適切なKintone操作を行います。`
-              },
-              { role: 'user', content: message },
-              {
-                ...data.choices[0].message,
-                content: null
-              },
-              ...toolCalls.map((toolCall, index) => ({
-                role: "tool",
-                content: JSON.stringify(results[index]),
-                tool_call_id: toolCall.id,
-                name: toolCall.function.name
-              }))
-            ],
-            response_format: {
-              type: "json_schema",
-              json_schema: {
-                name: "assistant_response",
-                strict: true,
-                schema: {
-                  type: "object",
-                  properties: {
-                    response_type: {
-                      type: "string",
-                      enum: ["standard_reply", "kintone_operation"],
-                      description: "Specifies the type of response: 'standard_reply' for general messages, or 'kintone_operation' for API operation instructions."
-                    },
-                    message: {
-                      type: "string",
-                      description: "This message provides a detailed summary of the retrieved field information and view settings, outlines the necessary steps for the user to take, and mentions that the operation can also be executed directly by pressing a button. The information should include specific field names and their attributes, as well as any updates to the view settings.",
-                      example: "フィールド情報が取得されました。このアプリには以下のフィールドが存在します:\n- 'ユーザー選択' (ユーザー選択フィールド)\n- 'ステータス' (ステータスフィールド)\n- '更新者' (更新者フィールド)\n\n次に、一覧に'更新者'フィールドを追加します。\n1. 'ビュー設定'で現在の一覧を確認します。\n2. 一覧に'更新者'フィールドを追加します。\n3. 設定を保存します。\n\nボタンを押すことで、これらの手順をスキップして、直接操作を実行することも可能です。"
-                    },
-                    operation: {
-                      type: ["object", "null"],
-                      description: "Contains details about the API operation to be performed, including the API endpoint, method, and request body. This can be null if no operation is required.",
-                      properties: {
-                        api: {
-                          type: "string",
-                          enum: [
-                            "/k/v1/preview/app/views.json",
-                            "/k/v1/preview/app/form/fields.json",
-                            "/k/v1/preview/app/status.json"
-                          ],
-                          description: "The Kintone API endpoint to be called."
-                        },
-                        method: {
-                          type: "string",
-                          enum: ["GET", "POST", "PUT"],
-                          description: "The HTTP method to be used for the API call."
-                        },
-                        body: {
-                          type: "string",
-                          description: "The JSON string representing the request body for the API call.",
-                          example: `{
+                上記の内容を元に、適切なKintone操作を行います。
+
+                ##kintone操作以外のプラグイン情報の検索など
+                searchRagより取得した検索結果によって、ユーザーから入力した内容に近いと思われるデータを出力しています。
+                それぞれのリンクへの案内は以下の情報を受け取ってJavaScript上で表示処理を行います。
+                検索結果の要約を返却するようにしてください。
+
+                - source: 検索先のURL
+                - title: 検索先ページのタイトル(検索先がHTMLに限る)
+                - description: 検索先ページのheadに含まれる説明(検索先がHTMLに限る)
+                - page: 検索先PDFのページ番号
+                `
+                },
+                { role: 'user', content: message },
+                {
+                  ...data.choices[0].message,
+                  content: null
+                },
+                ...toolCalls.map((toolCall, index) => ({
+                  role: "tool",
+                  content: JSON.stringify(results[index]),
+                  tool_call_id: toolCall.id,
+                  name: toolCall.function.name
+                }))
+              ],
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: "assistant_response",
+                  strict: true,
+                  schema: {
+                    type: "object",
+                    properties: {
+                      response_type: {
+                        type: "string",
+                        enum: ["standard_reply", "kintone_operation"],
+                        description: "Specifies the type of response: 'standard_reply' for general messages, or 'kintone_operation' for API operation instructions."
+                      },
+                      message: {
+                        type: "string",
+                        description: "This message provides a detailed summary of the retrieved field information and view settings, outlines the necessary steps for the user to take, and mentions that the operation can also be executed directly by pressing a button. The information should include specific field names and their attributes, as well as any updates to the view settings.",
+                        example: "フィールド情報が取得されました。このアプリには以下のフィールドが存在します:\n- 'ユーザー選択' (ユーザー選択フィールド)\n- 'ステータス' (ステータスフィールド)\n- '更新者' (更新者フィールド)\n\n次に、一覧に'更新者'フィールドを追加します。\n1. 'ビュー設定'で現在の一覧を確認します。\n2. 一覧に'更新者'フィールドを追加します。\n3. 設定を保存します。\n\nボタンを押すことで、これらの手順をスキップして、直接操作を実行することも可能です。"
+                      },
+                      operation: {
+                        type: ["object", "null"],
+                        description: "Contains details about the API operation to be performed, including the API endpoint, method, and request body. This can be null if no operation is required.",
+                        properties: {
+                          api: {
+                            type: "string",
+                            enum: [
+                              "/k/v1/preview/app/views.json",
+                              "/k/v1/preview/app/form/fields.json",
+                              "/k/v1/preview/app/status.json"
+                            ],
+                            description: "The Kintone API endpoint to be called."
+                          },
+                          method: {
+                            type: "string",
+                            enum: ["GET", "POST", "PUT"],
+                            description: "The HTTP method to be used for the API call."
+                          },
+                          body: {
+                            type: "string",
+                            description: "The JSON string representing the request body for the API call.",
+                            example: `{
                             "app": 123,
                             "views": {
                               "一覧名": {
@@ -409,51 +458,92 @@
                               }
                             }
                           }`
-                        }
+                          }
+                        },
+                        required: ["api", "method", "body"],
+                        additionalProperties: false
                       },
-                      required: ["api", "method", "body"],
-                      additionalProperties: false
-                    }
-                  },
-                  required: ["response_type", "message", "operation"],
-                  additionalProperties: false
+                      reference: {
+                        type: "array",
+                        description: "kintoneのコンテンツに関連するデータの配列。各要素は1つのコンテンツを表します。内容がユーザーの要件に合致する場合のみ含まれます。",
+                        items: {
+                          anyOf: [
+                            {
+                              type: "object",
+                              description: "HTMLソースの場合のメタデータ。",
+                              properties: {
+                                source: {
+                                  type: "string",
+                                  description: "コンテンツの出典となるURL。"
+                                },
+                                title: {
+                                  type: "string",
+                                  description: "コンテンツのタイトルまたは記事名。"
+                                }
+                              },
+                              required: ["source", "title"],
+                              additionalProperties: false
+                            },
+                            {
+                              type: "object",
+                              description: "PDFソースの場合のメタデータ。",
+                              properties: {
+                                page: {
+                                  type: "integer",
+                                  description: "PDF内のページ番号。"
+                                },
+                                source: {
+                                  type: "string",
+                                  description: "PDFの出典となるURL。"
+                                }
+                              },
+                              required: ["page", "source"],
+                              additionalProperties: false
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    required: ["response_type", "message", "operation", "reference"],
+                    additionalProperties: false
+                  }
                 }
               }
+            };
+
+            const updatedResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${config.token}`
+              },
+              body: JSON.stringify(completion_payload)
+            });
+
+            const updatedData = await updatedResponse.json();
+            const assistantResponse = JSON.parse(updatedData.choices[0].message.content);
+            console.log(assistantResponse)
+
+            // Process the assistant's response
+            if (assistantResponse.response_type === "standard_reply") {
+              // Display standard reply message
+              // displayMessage(chatOutput, 'AI: ' + marked.parse(assistantResponse.message));
+              displayMessage(chatOutput, assistantResponse.message, "AI", true);
+
+            } else if (assistantResponse.response_type === "kintone_operation") {
+              // Display operation message and create a button to execute the operation
+              displayMessage(chatOutput, assistantResponse.message, "AI", true);
+
+              createExecuteButton(assistantResponse.operation, chatOutput);
             }
-          };
-
-          const updatedResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${config.token}`
-            },
-            body: JSON.stringify(completion_payload)
-          });
-
-          const updatedData = await updatedResponse.json();
-          const assistantResponse = JSON.parse(updatedData.choices[0].message.content);
-
-          // Process the assistant's response
-          if (assistantResponse.response_type === "standard_reply") {
-            // Display standard reply message
-            // displayMessage(chatOutput, 'AI: ' + marked.parse(assistantResponse.message));
-            displayMessage(chatOutput, assistantResponse.message,"AI", true);
-
-          } else if (assistantResponse.response_type === "kintone_operation") {
-            // Display operation message and create a button to execute the operation
-            displayMessage(chatOutput, assistantResponse.message,"AI", true);
-
-            createExecuteButton(assistantResponse.operation, chatOutput);
           }
-
         } else {
-          displayMessage(chatOutput, 'No tool calls available.',"AI",false);
+          displayMessage(chatOutput, 'No tool calls available.', "AI", false);
         }
       }
     } catch (error) {
       console.error('Error:', error);
-      displayMessage(chatOutput, 'Error: Unable to get response from AI',"AI", false);
+      displayMessage(chatOutput, 'Error: Unable to get response from AI', "AI", false);
     }
   }
 
@@ -750,5 +840,31 @@
   async function getRecords() {
     return null;
   }
+
+  async function searchRag(query) {
+    const body = {
+      question: query, // ユーザーのクエリを設定
+      history: [] // 必要に応じて過去の履歴を追加
+    };
+
+    try {
+      const res = await kintone.plugin.app.proxy(
+        PLUGIN_ID,
+        'https://aa4k.api-labs.workers.dev',
+        'POST',
+        {}, // HTTPヘッダーが必要ならここで設定
+        body
+      );
+
+      const bodyContent = res[0]; // レスポンスの最初の要素を取得
+      console.log(bodyContent);
+
+      return bodyContent; // 必要に応じて返却
+    } catch (error) {
+      console.error("検索処理中にエラーが発生しました:", error);
+      return null; // エラー時にnullを返す
+    }
+  }
+
 
 })(kintone.$PLUGIN_ID);
