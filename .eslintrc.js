@@ -6,10 +6,13 @@ module.exports = {
     '@cybozu/eslint-config/lib/prettier.js',
   ],
   rules: {
-    'prettier/prettier': [
+    'sort-imports': [
       'error',
-      { singleQuote: true },
+      {
+        endOfLineState: 'auto',
+      },
     ],
+    'prettier/prettier': ['error', { singleQuote: true }],
     'space-before-function-paren': 0,
     'object-curly-spacing': 0,
   },

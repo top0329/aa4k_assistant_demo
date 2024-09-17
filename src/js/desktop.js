@@ -3,6 +3,25 @@
   const chatHistory = [];
   let searchResult = [];
 
+  // サジェストボタンを作成する関数
+  function createSuggestButton(text) {
+    const button = document.createElement('button');
+    button.textContent = text;
+    button.style.padding = '5px 10px';
+    button.style.border = '1px solid #007bff';
+    button.style.borderRadius = '5px';
+    button.style.backgroundColor = '#fff';
+    button.style.color = '#007bff';
+    button.style.cursor = 'pointer';
+
+    // ボタンクリック時に入力ボックスにテキストをセットするイベントリスナー
+    button.addEventListener('click', () => {
+      chatInput.value = text;
+    });
+
+    document.getElementById("container").appendChild(button)
+  }
+
   // ポップアップチャットUIを生成する関数
   function createChatPopup() {
     // ポップアップチャットコンテナを作成
@@ -62,6 +81,18 @@
 
     // チャットコンテナをページに追加
     document.body.appendChild(chatContainer);
+
+    // サジェストボタンを表示するコンテナを作成
+    const suggestContainer = document.createElement('div');
+    suggestContainer.style.display = 'flex';
+    suggestContainer.id = 'container'
+    suggestContainer.style.gap = '10px';  // ボタン間のスペース
+    suggestContainer.style.marginBottom = '10px';  // コンテナの下にスペース
+    chatContainer.appendChild(suggestContainer);
+
+    // サジェストボタンを追加
+    // createSuggestButton('こんにちは');
+
 
     // 閉じるボタンのクリックイベントを設定
     closeButton.addEventListener('click', function () {
@@ -253,8 +284,9 @@
 
       if (data.choices[0].message.content) {
         displayMessage(chatOutput, data.choices[0].message.content, "AI", true);
-        chatHistory.push(message);
-        chatHistory.push(assistantResponse.message);
+        // chatHistory.push(message);
+        // chatHistory.push(assistantResponse.message);
+
       }
 
       const toolCalls = data.choices[0].message.tool_calls;
@@ -420,6 +452,12 @@
                 - title: 検索先ページのタイトル(検索先がHTMLに限る)
                 - description: 検索先ページのheadに含まれる説明(検索先がHTMLに限る)
                 - page: 検索先PDFのページ番号
+                - provider: 情報の提供元を以下の３種類で表示しています
+                  - firstparty: kintone公式が案内している情報元
+                  - secondparty: サービス提供会社(showcase-tv)が提供している情報元
+                  - thirdparty: 第３者のサイトを参照した情報元
+                - pageType: ページのカテゴリー情報(以下は一部抜粋)
+                  - search_by_service_name: プラグインの情報
                 `
                 },
                 { role: 'user', content: message },
@@ -467,7 +505,7 @@
                           },
                           method: {
                             type: "string",
-                            enum: ["GET", "POST", "PUT"],
+                            enum: ["GET", "POST"],
                             description: "The HTTP method to be used for the API call."
                           },
                           body: {
@@ -489,42 +527,11 @@
                       },
                       reference: {
                         type: "array",
-                        description: "kintoneのコンテンツに関連するデータの配列。各要素は1つのコンテンツを表します。内容がユーザーの要件に合致する場合のみ含まれます。",
+                        description: "ユーザーの要望に沿ったタグの情報取得先のID一覧",
                         items: {
-                          anyOf: [
-                            {
-                              type: "object",
-                              description: "HTMLソースの場合のメタデータ。",
-                              properties: {
-                                source: {
-                                  type: "string",
-                                  description: "コンテンツの出典となるURL。"
-                                },
-                                title: {
-                                  type: "string",
-                                  description: "コンテンツのタイトルまたは記事名。"
-                                }
-                              },
-                              required: ["source", "title"],
-                              additionalProperties: false
-                            },
-                            {
-                              type: "object",
-                              description: "PDFソースの場合のメタデータ。",
-                              properties: {
-                                page: {
-                                  type: "integer",
-                                  description: "PDF内のページ番号。"
-                                },
-                                source: {
-                                  type: "string",
-                                  description: "PDFの出典となるURL。"
-                                }
-                              },
-                              required: ["page", "source"],
-                              additionalProperties: false
-                            }
-                          ]
+                          type: "string",
+                          description: "searchRag関数より取得先してきたデータを一意に識別するUUID",
+                          example: "7c9339e8-2a5c-4f7c-a1f8-f257bceed7f1"
                         }
                       }
                     },
@@ -554,21 +561,29 @@
               // displayMessage(chatOutput, 'AI: ' + marked.parse(assistantResponse.message));
               let messageWithSource = assistantResponse.message;
               messageWithSource += "\n\n**Sources:**\n";
-              const searchResultJSON = JSON.parse(searchResult);
-              for (let i = 0; i < 4; i++) {
-                if (searchResultJSON[i].metadata.page) {
-                  console.log(searchResultJSON[i].metadata.page)
-                  messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}#page=${searchResultJSON[i].metadata.page}\n
-                  provider: ${searchResultJSON[i].metadata.provider}\n`;
-                }
-                else {
-                  messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}\n
-                  provider: ${searchResultJSON[i].metadata.provider}\n`;
+              if (searchResult.length == 0) {
+
+                const searchResultJSON = JSON.parse(searchResult);
+                for (let i = 0; i < searchResultJSON.length; i++) {
+                  if (!assistantResponse.reference.includes(searchResultJSON[i].id)) {
+                    continue;
+                  }
+
+                  if (searchResultJSON[i].metadata.page) {
+                    console.log(searchResultJSON[i].metadata.page)
+                    messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}#page=${searchResultJSON[i].metadata.page}\n
+                  Provider: ${searchResultJSON[i].metadata.provider}\n`;
+                  }
+                  else {
+                    messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}\n
+                  Provider: ${searchResultJSON[i].metadata.provider}\n`;
+                  }
                 }
               }
+
               displayMessage(chatOutput, messageWithSource, "AI", true);
-              chatHistory.push(message);
-              chatHistory.push(assistantResponse.message);
+              // chatHistory.push(message);
+              // chatHistory.push(assistantResponse.message);
             } else if (assistantResponse.response_type === "kintone_operation") {
               // Display operation message and create a button to execute the operation
               displayMessage(chatOutput, assistantResponse.message, "AI", true);
@@ -908,28 +923,87 @@
   }
 
 
-  kintone.events.on(['app.record.index.show', 'app.record.index.edit.show', '	app.record.index.delete.submit'], (event) => {
+  kintone.events.on(['app.record.index.show', 'app.record.index.edit.show', '	app.record.index.delete.submit'], async (event) => {
     // createChatPopup();
     console.log(event)
+    // const suggest = await fetchOpenAISuggestion(event);
+    // createSuggestButton(suggest);
   });
 
-  kintone.events.on(['app.record.detail.show', 'app.record.detail.delete.submit', 'app.record.detail.process.proceed'], (event) => {
+  kintone.events.on(['app.record.detail.show', 'app.record.detail.delete.submit', 'app.record.detail.process.proceed'], async (event) => {
     console.log(event)
-    return event;
+    // const suggest = await fetchOpenAISuggestion(event);
+    // createSuggestButton(suggest);
+
   });
 
 
-  kintone.events.on(['app.record.edit.show', 'app.record.edit.submit'], (event) => {
+  kintone.events.on(['app.record.edit.show', 'app.record.edit.submit'], async (event) => {
     console.log(event)
+    // const suggest = await fetchOpenAISuggestion(event);
+    // createSuggestButton(suggest);
   });
 
-  kintone.events.on(['app.record.create.show'], (event) => {
+  kintone.events.on(['app.record.create.show'], async (event) => {
     console.log(event)
+    // const suggest = await fetchOpenAISuggestion(event);
+    // createSuggestButton(suggest);
   });
 
   kintone.events.on(['app.report.show'], (event) => {
     console.log(event)
   });
+
+  async function fetchOpenAISuggestion(eventData) {
+    var config = kintone.plugin.app.getConfig(PLUGIN_ID);
+
+    const apiEndpoint = 'https://api.openai.com/v1/chat/completions'; // OpenAI APIのエンドポイント
+
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.token}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-2024-08-06', // 使用するOpenAIモデル
+        messages: [
+          {
+            role: 'system',
+            content: 'あなたはkintone AIアシスタントです。ユーザーから与えられたイベントデータを元に、ユーザーが次に実行するべき操作やアクションに関するサジェストをボタン表示用の短い文言で作成してください。返答は、"button"キーのJSONオブジェクトとして返してください。'
+          },
+          { role: 'user', content: `kintone イベントデータ: ${JSON.stringify(eventData)}` }
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "suggestion_button",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                button: {
+                  type: "string",
+                  description: "サジェストボタンとして表示する文言。",
+                  example: "〇〇というフィールドコードは何のタイプですか？"
+                }
+              },
+              required: ["button"],
+              additionalProperties: false
+            }
+          }
+        }
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('OpenAI Suggestion:', data.choices[0].message.content); // 応答の内容をコンソールに出力
+      return JSON.parse(data.choices[0].message.content).button; // サジェスト内容を返す
+    } else {
+      console.error('OpenAI APIリクエストに失敗しました:', response.statusText);
+    }
+  }
 
 
   function monitorXMLHttpRequests() {
@@ -991,7 +1065,7 @@
 
   document.addEventListener('kintoneError', function (event) {
     const errorMessage = JSON.stringify(event.detail);
-    document.getElementById("ai_input").value = 'エラーが発生しました。理由を調査してください\n'+errorMessage
+    document.getElementById("ai_input").value = 'エラーが発生しました。理由を調査してください\n' + errorMessage
   });
 
   createChatPopup();
