@@ -1,8 +1,7 @@
 (function (PLUGIN_ID) {
-  kintone.events.on('app.record.index.show', () => {
-    createChatPopup();
-  });
 
+  const chatHistory = [];
+  let searchResult = [];
 
   // ポップアップチャットUIを生成する関数
   function createChatPopup() {
@@ -42,6 +41,7 @@
     // 入力ボックスを作成
     const chatInput = document.createElement('input');
     chatInput.type = 'text';
+    chatInput.id = 'ai_input'
     chatInput.placeholder = 'Type your message...';
     chatInput.style.width = 'calc(100% - 80px)';  // 入力ボックスの幅を調整
     chatInput.style.padding = '10px';
@@ -85,7 +85,7 @@
 
     if (senderType === 'AI') {
       messageElement.style.color = '#ffffff';  // AIメッセージのフォントカラー
-      messageElement.style.backgroundColor = '#5a9bd4';  // AIメッセージの背景色を淡い青色に設定
+      messageElement.style.backgroundColor = '#005b9f';  // ダークブルー系の背景色に変更
     } else if (senderType === 'user') {
       messageElement.style.color = '#000000';  // ユーザーメッセージのフォントカラー
       messageElement.style.backgroundColor = '#f1f1f1';  // ユーザーメッセージの背景色
@@ -120,12 +120,20 @@
           messages: [
             {
               role: "system",
-              content: `あなたはKintoneの専門的なサポートAIです。
-              ユーザーの入力言語を検出し、その言語で応答を生成します。
-              以下の場合は、Kintone APIを呼び出して関連する情報を収集してください。
+              content: `あなたはkintoneの専門的なサポートAIです。ユーザーの入力言語を検出し、その言語で応答を生成します。
+
+              """
+
+              ユーザーの入力がkintoneに関する質問、依頼、課題、またはkintoneの情報提供を求めている内容である場合は、必ず'searchRag'関数を使用して関連する情報を検索してください。
+              kintoneに関連する質問の場合、searchRagを通さずに返答をすることは誤情報の提供につながるため禁止とします。
+              質問の明確さに関係なく、kintoneの使用方法や解決策を求める全ての問い合わせをカバーするように努めてください。
+
+              """
+
+              ユーザーの指示が以下に該当する場合は、kintone APIを呼び出して関連する情報を収集してください。
               - 操作がアプリの設定の参照・変更を含む場合
               - 権限の設定が必要な場合
-              Kintone APIを呼び出すために指定する info_types とAPIのパスの一覧は以下のとおりです。
+              kintone APIを呼び出すために指定する info_types とAPIのパスの一覧は以下のとおりです。
               - "fields": /k/v1/app/form/fields.json
               - "views": /k/v1/app/views.json
               - "process": /k/v1/app/status.json
@@ -144,7 +152,13 @@
               - "app": /k/v1/app.json
               - "record": /k/v1/record.json
               - "records": /k/v1/records.json
-              ユーザーの要求を実現するために必要な操作をステップに分けて明確に説明してください。`
+              ユーザーの要求を実現するために必要な操作をステップに分けて明確に説明してください。
+
+              """
+              ユーザーからの入力が質問形式でない場合や具体的な要望が含まれない場合でも、kintoneに関連する可能性がある場合は'searchRag'関数を発動させ、情報提供を行ってください。
+
+              ユーザーからの入力に応じて複数のfunction callingが実行される場合もあります。
+              `
             },
             { role: 'user', content: message }
           ],
@@ -152,8 +166,8 @@
             {
               type: "function",
               function: {
-                name: "getKintoneAppInfo",
-                description: "Retrieve specified types of information from a Kintone app.",
+                name: "getkintoneAppInfo",
+                description: "Retrieve specified types of information from a kintone app.",
                 strict: true,
                 parameters: {
                   type: "object",
@@ -202,7 +216,7 @@
                         - 'record': Retrieves details of 1 record from an App by specifying the App ID and Record ID.
                         - 'records': Retrieves details of multiple records from an App by specifying the App ID and a query string.`
                       },
-                      description: `Types of information to retrieve from the Kintone app.
+                      description: `Types of information to retrieve from the kintone app.
                       To retrieve the list view settings, 'views' must be specified.`
                     }
                   },
@@ -215,7 +229,7 @@
               type: "function",
               function: {
                 name: "searchRag",
-                description: "Performs a search based on a user query. This function should be used for queries related to Kintone plugins or configuration methods, or when the user's question includes phrases like 'ありますか？' or 'どうすればいいですか？'.",
+                description: "Performs a search based on a user query. This function should be used for queries related to kintone plugins or configuration methods, or when the user's question includes phrases like 'ありますか？' or 'どうすればいいですか？'.",
                 strict: true,
                 parameters: {
                   type: "object",
@@ -239,6 +253,8 @@
 
       if (data.choices[0].message.content) {
         displayMessage(chatOutput, data.choices[0].message.content, "AI", true);
+        chatHistory.push(message);
+        chatHistory.push(assistantResponse.message);
       }
 
       const toolCalls = data.choices[0].message.tool_calls;
@@ -251,7 +267,7 @@
             const functionName = toolCall.function.name; // 呼び出す関数の名前を取得
 
             const args = JSON.parse(toolCall.function.arguments);
-            if (functionName === "getKintoneAppInfo") {
+            if (functionName === "getkintoneAppInfo") {
 
               const infoTypes = args.info_types;
 
@@ -335,7 +351,9 @@
               }
             } else if (functionName === "searchRag") {
               const query = args.query; // searchRag用の検索クエリを取得
-              const searchResult = await searchRag(query); // searchRag関数を呼び出し
+              console.log("query: ", query);
+              searchResult = await searchRag(query); // searchRag関数を呼び出し
+              console.log("searchResult: ", searchResult);
 
               if (searchResult) {
                 results.push(searchResult);
@@ -353,17 +371,23 @@
                 {
                   role: 'system',
                   content: `
-                #アシスタントの概要  
-                あなたはKintoneアプリに関する情報を提供する役立つアシスタントです。アプリIDは${kintone.app.getId()}です。
+                #アシスタントの概要
+                あなたはkintoneアプリに関する情報を提供する役立つアシスタントです。アプリIDは${kintone.app.getId()}です。
                 ユーザーが実行したい特定のタスクや探したいソリューションやプラグイン、設定方法についてkintoneでの操作をガイドおよび解決方法を案内します。
                 操作方法と検索結果のいずれかや両方が含まれる可能性があります。
+
+                返答では以下の優先度を意識して返答を作成してください。
+                1. 最初にkintoneの基本機能で実現か可能か
+                2. 次にエコシステムが提供しているkintoneプラグインを導入すれば解決が可能か
+                3. 基本機能にもプラグインにも見つからずJavaScriptなどのカスタマイズ開発が必要か
+                カスタマイズ開発が必要な場合は、他の機能でJavaScriptカスタマイズ開発専用のプラグイン「Associate AIHub for kintone」を提供しているのでユーザーに推薦をお願いします。
 
                 ##kintone操作に関連する場合
                 各ステップで実行される操作について詳しく説明し、ユーザーが全体の流れを明確に理解できるようにします。
                 また、ユーザーの入力言語を検出し、その言語で応答を提供することで、ユーザーにとってより親しみやすいコミュニケーションを実現します。
                 フィールドの追加やレコードの更新など、どのような操作が行われるのかを丁寧に説明してください。
 
-                Kintoneアプリの一覧画面を操作する際、以下の項目が必須となります：
+                kintoneアプリの一覧画面を操作する際、以下の項目が必須となります：
 
                 1. **app**: 数値 - アプリIDを指定します。必須です。
                 2. **views**: オブジェクト - 一覧の設定の一覧を指定します。必須です。指定しないと既存の一覧は削除されます。
@@ -385,7 +409,7 @@
                 - 実行されるメソッド: {method}
                 - リクエストボディの内容: {bodyの要約}
 
-                上記の内容を元に、適切なKintone操作を行います。
+                上記の内容を元に、適切なkintone操作を行います。
 
                 ##kintone操作以外のプラグイン情報の検索など
                 searchRagより取得した検索結果によって、ユーザーから入力した内容に近いと思われるデータを出力しています。
@@ -439,7 +463,7 @@
                               "/k/v1/preview/app/form/fields.json",
                               "/k/v1/preview/app/status.json"
                             ],
-                            description: "The Kintone API endpoint to be called."
+                            description: "The kintone API endpoint to be called."
                           },
                           method: {
                             type: "string",
@@ -528,8 +552,23 @@
             if (assistantResponse.response_type === "standard_reply") {
               // Display standard reply message
               // displayMessage(chatOutput, 'AI: ' + marked.parse(assistantResponse.message));
-              displayMessage(chatOutput, assistantResponse.message, "AI", true);
-
+              let messageWithSource = assistantResponse.message;
+              messageWithSource += "\n\n**Sources:**\n";
+              const searchResultJSON = JSON.parse(searchResult);
+              for (let i = 0; i < 4; i++) {
+                if (searchResultJSON[i].metadata.page) {
+                  console.log(searchResultJSON[i].metadata.page)
+                  messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}#page=${searchResultJSON[i].metadata.page}\n
+                  provider: ${searchResultJSON[i].metadata.provider}\n`;
+                }
+                else {
+                  messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}\n
+                  provider: ${searchResultJSON[i].metadata.provider}\n`;
+                }
+              }
+              displayMessage(chatOutput, messageWithSource, "AI", true);
+              chatHistory.push(message);
+              chatHistory.push(assistantResponse.message);
             } else if (assistantResponse.response_type === "kintone_operation") {
               // Display operation message and create a button to execute the operation
               displayMessage(chatOutput, assistantResponse.message, "AI", true);
@@ -537,6 +576,7 @@
               createExecuteButton(assistantResponse.operation, chatOutput);
             }
           }
+          console.log(chatHistory);
         } else {
           displayMessage(chatOutput, 'No tool calls available.', "AI", false);
         }
@@ -558,20 +598,20 @@
     executeButton.style.color = 'white';
     executeButton.style.cursor = 'pointer';
 
-    executeButton.onclick = () => executeKintoneOperation(operation, chatOutput);
+    executeButton.onclick = () => executekintoneOperation(operation, chatOutput);
     chatOutput.appendChild(executeButton);
   }
 
-  async function executeKintoneOperation(operation, chatOutput) {
+  async function executekintoneOperation(operation, chatOutput) {
     try {
       // Convert operation body back to JSON if needed
       const body = JSON.parse(operation.body);
       const response = await kintone.api(kintone.api.url(operation.api, true), operation.method, body);
       console.log('Operation successful:', response);
-      displayMessage(chatOutput, 'Kintone operation executed successfully.');
+      displayMessage(chatOutput, 'kintone operation executed successfully.');
     } catch (error) {
-      console.error('Error executing Kintone operation:', error);
-      displayMessage(chatOutput, 'Failed to execute Kintone operation.');
+      console.error('Error executing kintone operation:', error);
+      displayMessage(chatOutput, 'Failed to execute kintone operation.');
     }
   }
 
@@ -844,20 +884,21 @@
   async function searchRag(query) {
     const body = {
       question: query, // ユーザーのクエリを設定
-      history: [] // 必要に応じて過去の履歴を追加
+      history: chatHistory // 必要に応じて過去の履歴を追加
     };
+    console.log('chatHistory in searchRag: ', chatHistory);
 
     try {
       const res = await kintone.plugin.app.proxy(
         PLUGIN_ID,
-        'https://aa4k.api-labs.workers.dev',
+        'https://aa4k-hybrid-metadata.api-labs.workers.dev/',
         'POST',
         {}, // HTTPヘッダーが必要ならここで設定
         body
       );
 
       const bodyContent = res[0]; // レスポンスの最初の要素を取得
-      console.log(bodyContent);
+      console.log("bodyContent: ", bodyContent);
 
       return bodyContent; // 必要に応じて返却
     } catch (error) {
@@ -865,6 +906,95 @@
       return null; // エラー時にnullを返す
     }
   }
+
+
+  kintone.events.on(['app.record.index.show', 'app.record.index.edit.show', '	app.record.index.delete.submit'], (event) => {
+    // createChatPopup();
+    console.log(event)
+  });
+
+  kintone.events.on(['app.record.detail.show', 'app.record.detail.delete.submit', 'app.record.detail.process.proceed'], (event) => {
+    console.log(event)
+    return event;
+  });
+
+
+  kintone.events.on(['app.record.edit.show', 'app.record.edit.submit'], (event) => {
+    console.log(event)
+  });
+
+  kintone.events.on(['app.record.create.show'], (event) => {
+    console.log(event)
+  });
+
+  kintone.events.on(['app.report.show'], (event) => {
+    console.log(event)
+  });
+
+
+  function monitorXMLHttpRequests() {
+    const originalOpen = XMLHttpRequest.prototype.open;
+    const originalSend = XMLHttpRequest.prototype.send;
+
+    XMLHttpRequest.prototype.open = function (method, url) {
+      this._url = url;
+
+      // this.addEventListener('readystatechange', function () {
+      //   console.log("readystatechange to:", this.readyState);
+      // });
+
+      return originalOpen.apply(this, arguments);
+    };
+
+    XMLHttpRequest.prototype.send = function (body) {
+      console.log("Request to:", this._url);
+
+      // 正常なレスポンスの場合
+      this.addEventListener('load', function () {
+        console.log("Response from:", this._url, "Status:", this.status);
+        if (this.status >= 200 && this.status < 300) {
+          console.log("Success response:", this.responseText);
+          const res = JSON.parse(this.responseText)
+          if (res && typeof res === 'object' && res.code) {
+            // 追加の通知処理
+            const event = new CustomEvent('kintoneError', {
+              detail: res
+            });
+            document.dispatchEvent(event);
+          }
+        } else {
+          console.log("Non-success response:", this.status, this.statusText);
+        }
+      });
+
+      // エラー発生時の処理
+      this.addEventListener('error', function () {
+        console.error("Error during request to:", this._url);
+      });
+
+      // タイムアウト時の処理
+      this.addEventListener('timeout', function () {
+        console.error("Request to:", this._url, "timed out.");
+      });
+
+      // 通信が中断された場合
+      this.addEventListener('abort', function () {
+        console.warn("Request to:", this._url, "was aborted.");
+      });
+
+      return originalSend.apply(this, arguments);
+    };
+  }
+
+  // 関数を呼び出してXMLHttpRequestを監視
+  monitorXMLHttpRequests();
+
+  document.addEventListener('kintoneError', function (event) {
+    const errorMessage = JSON.stringify(event.detail);
+    document.getElementById("ai_input").value = 'エラーが発生しました。理由を調査してください\n'+errorMessage
+  });
+
+  createChatPopup();
 
 
 })(kintone.$PLUGIN_ID);
