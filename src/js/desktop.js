@@ -187,7 +187,6 @@
                     },
                     shouldSearch:{
                       type: "boolean",
-                      // description: "ユーザーの問いかけに対して検索が必要かどうかを返却"
                       description: "Returns whether a RAG search is required in response to a user query."
                     }
                   },
@@ -478,6 +477,7 @@
       }
 
       // Send the results back to OpenAI
+      console.log(JSON.stringify((await getViewInformation(kintone.app.getId())).data.views));
       const completion_payload = {
         model: 'gpt-4o-2024-08-06',
         messages: [
@@ -586,7 +586,7 @@
                           properties: {
                             views: {
                               type: "array",
-                              description: "kintone app views list",
+                              description: `kintone app views list. Have to add past views to the list. Current view lists are here: ${JSON.stringify((await getViewInformation(kintone.app.getId())).data.views)}`,
                               items: {
                                 type: "object",
                                 description: "kintone list app body properties",
@@ -671,7 +671,6 @@
                                         * 例: 数値_0 >= 10 and 数値_0 <= 20
                                         * 説明: 上述の演算子を使用した2つの条件式の論理積
 
-
                                       ##### 補足
 
                                       *   テーブル内のフィールド、および関連レコードのフィールドをクエリに含める場合、"="や"!="演算子の代わりに、"in"や"not in"演算子を使ってください。
@@ -727,7 +726,6 @@
                                         * 例: 日時 = NEXT_YEAR()
                                         * 説明: APIを実行した年の翌年
 
-
                                       * オプション: order by
                                         * 例: order by 更新日時asc
                                         * 説明: レコードを取得する順番本オプションに続けて指定したフィールドコードの値で並び替えられます。フィールドコードの後にascを指定すると昇順、descを指定すると降順で並び替えられます。複数の項目で並び替える場合、「フィールドコード 並び順」をカンマ区切りで指定します。例：order by フィールドコード1 desc, フィールドコード2 asc省略すると、レコードIDの降順で並び替えされます。order byで指定できるフィールドには制限があります。詳細は次のページを参照してください。        ソートで選択できるフィールド
@@ -737,7 +735,6 @@
                                       * オプション: offset
                                         * 例: offset 30
                                         * 説明: 取得をスキップするレコード数たとえばoffset 30を指定すると、レコード先頭から30番目までのレコードは取得せず、31番目のレコードから取得します。0から10,000までの数値を指定できます。省略すると、0が設定されます。
-
 
                                       #### フィールド、システム識別子ごとの利用可能な演算子と関数一覧
 
@@ -827,7 +824,6 @@
                                       * フィールドまたはシステム識別子: カテゴリー
                                         * なし
                                         * 利用可能な関数: なし
-
 
                                       次のフィールドの値に、ダブルクオートやバックスラッシュを含む場合、エスケープが必要です。
 
@@ -1351,7 +1347,15 @@
 
   async function executekintoneOperation(operation, chatOutput) {
     try {
+      console.log(operation);
       const body = convertFieldData(operation.body);
+      console.log(body);
+      if(body.views) {
+        const views = await getViewInformation(body.app);
+        console.log(views.data.views);
+        body.views = { ...body.views, ...views.data.views };
+        console.log(body.views);
+      }
       const response = await kintone.api(kintone.api.url(operation.api, true), operation.method, body);
       console.log('Operation successful:', response);
       displayMessage(chatOutput, 'kintone operation executed successfully.');
