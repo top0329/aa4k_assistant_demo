@@ -204,12 +204,25 @@
       if(res) {
         const resData = await res.json();
         const resToolCalls = resData.choices[0].message.tool_calls;
-        const _args = JSON.parse(resToolCalls[0].function.arguments);
-        if(_args.shouldSearch && _args.query) {
-          const _searchResult = await searchRag(_args.query);
-          rag = `
-            検索結果：　${_searchResult}
-          `;
+        if (resToolCalls && resToolCalls.length > 0) {
+          const _args = JSON.parse(resToolCalls[0].function.arguments);
+          if(_args.shouldSearch && _args.query) {
+            const _searchResult = await searchRag(_args.query);
+            chatHistory.push({
+              role: "assistant",
+              content: null,
+              tool_calls: resToolCalls
+            });
+            chatHistory.push({
+              role: "tool",
+              content: JSON.stringify(_searchResult),
+              tool_call_id: resToolCalls[0].id,
+              name: resToolCalls[0].function.name
+            });
+            rag = `
+              検索結果：　${_searchResult}
+            `;
+          }
         }
       }
 
@@ -548,9 +561,13 @@
                         *   複数選択
                         *   ステータス
                       `
+                    },
+                    recordId: {
+                      type: ["string", "null"],
+                      description: `The record ID of the record to retrieve.`
                     }
                   },
-                  required: ["info_types", "appId", "query"],
+                  required: ["info_types", "appId", "query", "recordId"],
                   additionalProperties: false
                 }
               }
@@ -588,24 +605,13 @@
           const results = [];
           const functionName = toolCall.function.name; // 呼び出す関数の名前を取得
           const args = JSON.parse(toolCall.function.arguments);
-          const { query, shouldSearch } = args; // searchRag用の検索クエリを取得
+          const { query, recordId } = args; // searchRag用の検索クエリを取得
           console.log('=>>>>>>>>>>>>>>>>>>', args);
 
           results.push(await getFieldInformation(kintone.app.getId()));
           displayMessage(chatOutput, "フィールド情報が正常に取得されました。", "AI", false);
 
-          if (functionName === "searchRag" && shouldSearch && query) {
-            console.log("query: ", query);
-            searchResult = await searchRag(query); // searchRag関数を呼び出し
-            console.log("searchResult: ", searchResult);
-
-            if (searchResult) {
-              results.push(searchResult);
-              displayMessage(chatOutput, "検索結果が正常に取得されました。", "AI", false);
-            } else {
-              displayMessage(chatOutput, "検索結果が見つかりませんでした。", "AI", false);
-            }
-          } else if (functionName === "getkintoneAppInfo") {
+          if (functionName === "getkintoneAppInfo") {
             const infoTypes = args.info_types;
             const appId = args.appId || kintone.app.getId();
 
@@ -677,11 +683,11 @@
                   displayMessage(chatOutput, "1件のアプリの情報が正常に取得されました。", "AI", false);
                   break;
                 case "record":
-                  results.push(await getRecord());
+                  results.push(await getRecord(appId, recordId));
                   displayMessage(chatOutput, "1件のレコードが正常に取得されました。", "AI", false);
                   break;
                 case "records":
-                  results.push(await getRecords(appId));
+                  results.push(await getRecords(appId, query));
                   displayMessage(chatOutput, "複数のレコードが正常に取得されました。", "AI", false);
                   break;
                 default:
@@ -1847,16 +1853,29 @@
   }
 
   // 1件のレコードを取得するAPIのダミー
-  async function getRecord() {
-    return null;
-  }
-
-  // 複数のレコードを取得するAPIのダミー
-  async function getRecords(appId) {
+  async function getRecord(appId, recordId) {
     return new Promise((resolve, reject) => {
       const body = {
         app: appId,
-        query: '',
+        id: recordId
+      };
+
+      kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', body, (resp) => {
+        console.log('Records:', resp);
+        resolve({ type: 'records', appId: appId, data: resp });
+      }, (error) => {
+        console.error('Error fetching process management settings:', error);
+        reject(error);
+      });
+    });
+  }
+
+  // 複数のレコードを取得するAPIのダミー
+  async function getRecords(appId, query) {
+    return new Promise((resolve, reject) => {
+      const body = {
+        app: appId,
+        query: query,
         fields: [],
         totalCount: true,
       };
