@@ -341,8 +341,17 @@
                     },
                     query: {
                       type: ["string", "null"],
-                      description: `The query string to retrieve records from an App. This is used in conjunction with the 'records' info_type.
-                        Here is input prompt ${message}.
+                      description: `アプリからレコードを取得するためのクエリ文字列です。これは 'records' info_type と併せて使用されます。
+                        フィールドタイプに応じてクエリを生成する必要があります。以下のルールに特に注意してください：
+                        1. 'ドロップダウン'フィールドの場合、'=' の代わりに 'in' 演算子を使用します。例：'ドロップダウン_0 in ("A", "B")'
+                        2. '複数選択'フィールドの場合も 'in' 演算子を使用します。例：'複数選択_0 in ("オプション1", "オプション2")'
+                        3. 'チェックボックス'フィールドの場合も 'in' 演算子を使用します。例：'チェックボックス_0 in ("チェック1", "チェック2")'
+                        4. 'ラジオボタン'フィールドの場合、'in' 演算子を使用します。例：'ラジオボタン_0 in ("ラジオ1")'
+                        5. '文字列（1行）'や'文字列（複数行）'などのテキストベースのフィールドの場合、部分一致には 'like' 演算子を使用します。例：'文字列_0 like "テスト"'
+                        6. 数値フィールドの場合、'=', '>', '<', '>=', '<=' などの適切な演算子を使用します。例：'数値_0 > 10'
+                        7. 日付フィールドの場合、適切な場合は日付関数を使用します。例：'日付_0 = TODAY()'
+
+                        異なるフィールドタイプに対する演算子の互換性の問題を避けるため、これらのルールに従ってクエリを生成してください。
 
                         ### クエリの書き方
 
@@ -557,6 +566,9 @@
                         *   ドロップダウン
                         *   複数選択
                         *   ステータス
+
+                        クエリ文字列はこちらです: ${message}
+                        フィールド情報はこちらです: ${JSON.stringify((await getFieldInformation(kintone.app.getId())).data.fields)}
                       `
                     },
                     recordId: {
@@ -1585,8 +1597,33 @@
       if(body.views) {
         const views = await getViewInformation(body.app);
         console.log(views.data.views);
-        body.views = { ...body.views, ...views.data.views };
+
+        // Extract existing index values
+        const existingIndices = new Set();
+        Object.values(views.data.views).forEach(view => {
+          if (view.index) existingIndices.add(parseInt(view.index));
+        });
+
+        // Find the maximum existing index
+        const maxIndex = Math.max(...existingIndices);
+
+        // Assign new, unique indices where needed
+        let newIndex = maxIndex + 1;
+        Object.keys(body.views).forEach(viewName => {
+          const view = body.views[viewName];
+          if (!view.index || existingIndices.has(parseInt(view.index))) {
+            view.index = newIndex.toString();
+            newIndex++;
+          }
+          existingIndices.add(parseInt(view.index));
+        });
+
+        body.views = { ...views.data.views, ...body.views };
         console.log(body.views);
+        // const views = await getViewInformation(body.app);
+        // console.log(views.data.views);
+        // body.views = { ...body.views, ...views.data.views };
+        // console.log(body.views);
       }
       const response = await kintone.api(kintone.api.url(operation.api, true), operation.method, body);
       console.log('Operation successful:', response);
@@ -1887,7 +1924,8 @@
         resolve({ type: 'records', appId: appId, data: resp });
       }, (error) => {
         console.error('Error fetching process management settings:', error);
-        reject(error);
+        // reject(error);
+        resolve({ type: 'fieldPermissions', appId: appId, data: error });
       });
     });
   }
