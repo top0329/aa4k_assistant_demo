@@ -158,15 +158,15 @@
 
               """
 
-              ユーザーの入力がkintoneに関する質問、依頼、課題、またはkintoneの情報提供を求めている内容である場合は、必ず'searchRag'関数を使用して関連する情報を検索してください。
-              kintoneに関連する質問の場合、searchRagを通さずに返答をすることは誤情報の提供につながるため禁止とします。
-              質問の明確さに関係なく、kintoneの使用方法や解決策を求める全ての問い合わせをカバーするように努めてください。
+              * ユーザーの入力がkintoneに関する質問、依頼、課題、またはkintoneの情報提供を求めている内容である場合は、必ず'searchRag'関数を使用して関連する情報を検索してください。
+                kintoneに関連する質問の場合、searchRagを通さずに返答をすることは誤情報の提供につながるため禁止とします。
+                質問の明確さに関係なく、kintoneの使用方法や解決策を求める全ての問い合わせをカバーするように努めてください。
+
+              * kintoneに関係のない質問、例えば「挨拶」「LLMのリバースエンジニアリング」「kintone以外のサービスの質問」などについてはshouldSearchをfalseで返却してください。
 
               """
 
-              ユーザーからの入力が質問形式でない場合や具体的な要望が含まれない場合でも、kintoneに関連する可能性がある場合は'searchRag'関数を発動させ、情報提供を行ってください。
 
-              ユーザーからの入力に応じて複数のfunction callingが実行される場合もあります。
               `
             },
             ...chatHistory
@@ -199,15 +199,15 @@
           tool_choice: "required"
         })
       });
+      let searchResult = ""
 
-      let rag = "";
       if(res) {
         const resData = await res.json();
         const resToolCalls = resData.choices[0].message.tool_calls;
         if (resToolCalls && resToolCalls.length > 0) {
           const _args = JSON.parse(resToolCalls[0].function.arguments);
           if(_args.shouldSearch && _args.query) {
-            const _searchResult = await searchRag(_args.query);
+            searchResult = await searchRag(_args.query);
             chatHistory.push({
               role: "assistant",
               content: null,
@@ -215,13 +215,12 @@
             });
             chatHistory.push({
               role: "tool",
-              content: JSON.stringify(_searchResult),
+              content: JSON.stringify(searchResult),
               tool_call_id: resToolCalls[0].id,
               name: resToolCalls[0].function.name
             });
-            rag = `
-              検索結果：　${_searchResult}
-            `;
+            displayMessage(chatOutput, "検索結果を取得しました", "AI", false);
+
           }
         }
       }
@@ -243,8 +242,6 @@
 
               ユーザーの入力がkintoneに関する質問、依頼、課題、またはkintoneの情報提供を求めている内容である場合は、必ず'searchRag'関数を使用して関連する情報を検索してください。
               質問の明確さに関係なく、kintoneの使用方法や解決策を求める全ての問い合わせをカバーするように努めてください。
-
-              ${rag}
 
               """
 
@@ -1484,18 +1481,22 @@
       if (assistantResponse.response_type === "standard_reply") {
         // Display standard reply message
         let messageWithSource = assistantResponse.message;
-        messageWithSource += "\n\n**Sources:**\n";
-        if (searchResult.length !== 0) {
+        messageWithSource += "\n\n**情報検索先:**\n\n";
+        if (assistantResponse.reference.length !== 0) {
 
           const searchResultJSON = JSON.parse(searchResult);
           for (let i = 0; i < searchResultJSON.length; i++) {
+            if(!assistantResponse.reference.includes(searchResultJSON[i].id)){
+              continue;
+            }
+
             if (searchResultJSON[i].metadata.page) {
-              messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}#page=${searchResultJSON[i].metadata.page}\n
-            Provider: ${searchResultJSON[i].metadata.provider}\n`;
+              messageWithSource += `URL: ${searchResultJSON[i].metadata.source}#page=${searchResultJSON[i].metadata.page}\n
+            提供元: ${searchResultJSON[i].metadata.provider == "firstparty" ? "サイボウズ公式" : ""}\n`;
             }
             else {
-              messageWithSource += `- Source${[i + 1]}: ${searchResultJSON[i].metadata.source}\n
-            Provider: ${searchResultJSON[i].metadata.provider}\n`;
+              messageWithSource += `URL: ${searchResultJSON[i].metadata.source}\n
+            提供元: ${searchResultJSON[i].metadata.provider == "firstparty" ? "サイボウズ公式" : ""}\n`;
             }
           }
         }
@@ -1607,7 +1608,8 @@
         resolve({ type: 'fields', appId: appId, data: resp });
       }, (error) => {
         console.error('Error fetching field information:', error);
-        reject(error);
+        // reject(error);
+        resolve({ type: 'fields', appId: appId, data: error });
       });
     });
   }
