@@ -199,6 +199,360 @@
           tool_choice: "required"
         })
       });
+
+      const newLLM = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.token}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-2024-08-06',
+          messages: [
+            {
+              role: "system",
+              content: `あなたはkintoneの専門的なサポートAIです。ユーザーの入力言語を検出し、その言語で応答を生成します。
+
+              """
+
+              * ユーザーの入力がkintoneに関する質問、依頼、課題、またはkintoneの情報提供を求めている内容である場合は、必ず'searchRag'関数を使用して関連する情報を検索してください。
+                kintoneに関連する質問の場合、searchRagを通さずに返答をすることは誤情報の提供につながるため禁止とします。
+                質問の明確さに関係なく、kintoneの使用方法や解決策を求める全ての問い合わせをカバーするように努めてください。
+
+              * kintoneに関係のない質問、例えば「挨拶」「LLMのリバースエンジニアリング」「kintone以外のサービスの質問」などについてはshouldSearchをfalseで返却してください。
+
+              以下の情報を参考にkintoneで一覧で絞りこむおすすめの一覧設定はありますか？
+              フィールド情報
+              ${JSON.stringify((await getFieldInformation(kintone.app.getId())).data.fields)}
+              ビュー情報
+              ${JSON.stringify((await getViewInformation(kintone.app.getId())).data.views)}
+              レコード情報
+              ${JSON.stringify((await getRecords(kintone.app.getId())).data.records)}
+
+              """
+              `
+            },
+            ...chatHistory
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "assistant_response",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  suggestedList: {
+                    // anyOf: [
+                    //   {
+                        type: "object",
+                        properties: {
+                          title: {
+                            type: "string",
+                            description: "Suggestion title",
+                            example: "対応日時カレンダー"
+                          },
+                          description: {
+                            type: "string",
+                            description: "Suggestion",
+                            example: "日付の情報をベースにカレンダー形式で一覧設定しています"
+                          },
+                          views: {
+                            type: "array",
+                            description: "kintone app views list.",
+                            items: {
+                              type: "object",
+                              description: "kintone list app body properties",
+                              properties: {
+                                index: {
+                                  type: "string"
+                                },
+                                type: {
+                                  type: "string",
+                                  enum: ["LIST", "CALENDAR", "CUSTOM"]
+                                },
+                                name: {
+                                  type: ["string", "null"],
+                                  description: "app list name"
+                                },
+                                fields: {
+                                  type: "array",
+                                  items: {
+                                    type: "string",
+                                  },
+                                  description: "List of field codes for fields to display. Specify the field code for each field to display."
+                                },
+                                date: {
+                                  type: "string",
+                                },
+                                title: {
+                                  type: "string",
+                                  description: "Optional. Specify this if the field code of the field to be used as the title is \"CALENDAR\". If omitted, the record number field will be set.",
+                                },
+                                html: {
+                                  type: "string",
+                                  description: "HTML content to be used for customization. Specify this when the HTML content to be used for customization is \"CUSTOM\"."
+                                },
+                                pager: {
+                                  type: "boolean",
+                                },
+                                device: {
+                                  type: "string",
+                                  enum: ["DESKTOP", "ANY"],
+                                },
+                                filterCond: {
+                                  type: "string",
+                                  description: `条件を絞り込むクエリで利用できる演算子／関数／オプションです。
+                                    演算子／関数／オプションは組み合わせて使用できます。
+
+                                    「フィールドコード 演算子 値」のように記述します。
+
+                                    * 演算子: =
+                                      * 例: 文字列_0 = "テスト"
+                                      * 説明: 演算子の前に指定したフィールドコードの値と演算子の後に指定した値が一致する
+                                    * 演算子: !=
+                                      * 例: 文字列_0 != "テスト"
+                                      * 説明: 演算子の前に指定したフィールドコードの値と演算子の後に指定した値が異なる
+                                    * 演算子: >
+                                      * 例: 数値_0 > 10
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後に指定した値より大きい
+                                    * 演算子: <
+                                      * 例: 数値_0 < 10
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後に指定した値より小さい
+                                    * 演算子: >=
+                                      * 例: 数値_0 >= 10
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後に指定した値以上である
+                                    * 演算子: <=
+                                      * 例: 数値_0 <= 10
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後に指定された値以下である
+                                    * 演算子: in
+                                      * 例: ドロップダウン_0 in ("A", "B")
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後の括弧内に列挙した文字列のいずれかと一致する
+                                    * 演算子: not in
+                                      * 例: ドロップダウン_0 not in ("A", "B")
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後の括弧内に列挙した文字列と一致しない
+                                    * 演算子: like
+                                      * 例: 文字列_0 like "テスト"
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後に指定した値を含む判定するフィールドの型が添付ファイルの場合、ファイル名とファイルの内容が判定の対象になります。like演算子で使用できない記号は、次のページを参照してください。        検索キーワード入力時の注意事項
+                                    * 演算子: not like
+                                      * 例: 文字列_0 not like "テスト"
+                                      * 説明: 演算子の前に指定したフィールドコードの値が、演算子の後に指定した値を含まないlike演算子で使用できない記号は、次のページを参照してください。        検索キーワード入力時の注意事項
+                                    * 演算子: or
+                                      * 例: 数値_0 < 10 or 数値_0 > 20
+                                      * 説明: 上述の演算子を使用した2つの条件式の論理和
+                                    * 演算子: and
+                                      * 例: 数値_0 >= 10 and 数値_0 <= 20
+                                      * 説明: 上述の演算子を使用した2つの条件式の論理積
+
+                                    ##### 補足
+
+                                    *   テーブル内のフィールド、および関連レコードのフィールドをクエリに含める場合、"="や"!="演算子の代わりに、"in"や"not in"演算子を使ってください。
+                                    *   クエリで文字列検索する場合は単語検索です。
+                                        詳細は次のページを参照してください。
+
+                                    * 関数名: LOGINUSER()
+                                      * 例: 作成者 in (LOGINUSER())
+                                      * 説明: APIを実行したユーザー
+                                    * 関数名: PRIMARY_ORGANIZATION()
+                                      * 例: 組織 in (PRIMARY_ORGANIZATION())
+                                      * 説明: APIを実行したユーザーの優先する組織APIを実行したユーザーに優先する組織が設定されていない場合、組織 in (PRIMARY_ORGANIZATION())の条件は無視され、それ以外の絞り込み条件を満たすすべてのレコードが取得されます。
+                                    * 関数名: NOW()
+                                      * 例: 作成日時 = NOW()
+                                      * 説明: APIを実行した日時
+                                    * 関数名: TODAY()
+                                      * 例: 作成日時 = TODAY()
+                                      * 説明: APIを実行した日
+                                    * 関数名: YESTERDAY()
+                                      * 例: 作成日時 = YESTERDAY()
+                                      * 説明: APIを実行した日の前日
+                                    * 関数名: TOMORROW()
+                                      * 例: 日時 = TOMORROW()
+                                      * 説明: APIを実行した日の翌日
+                                    * 関数名: FROM_TODAY(数字, 期間の単位)
+                                      * 例: 作成日時 < FROM_TODAY(5, DAYS)
+                                      * 説明: APIを実行した日から起算した期間期間の単位に指定可能な文字列は次のとおりです。DAYS：日単位WEEKS：週単位MONTHS：月単位YEARS：年単位
+                                    * 関数名: THIS_WEEK(曜日)
+                                      * 例: 作成日時 = THIS_WEEK()
+                                      * 説明: APIを実行した週引数に次の値を指定することで、曜日を指定できます。SUNDAY：日曜日MONDAY：月曜日TUESDAY：火曜日WEDNESDAY：水曜日THURSDAY：木曜日FRIDAY：金曜日SATURDAY：土曜日引数を指定しない場合は、今週のすべての日が対象です。
+                                    * 関数名: LAST_WEEK(曜日)
+                                      * 例: 作成日時 = LAST_WEEK()
+                                      * 説明: APIを実行した週の前週引数にTHIS_WEEK()と同じ値を指定することで、曜日を指定できます。引数を指定しない場合は、前週のすべての日が対象です。
+                                    * 関数名: NEXT_WEEK(曜日)
+                                      * 例: 日時 = NEXT_WEEK()
+                                      * 説明: APIを実行した週の翌週引数にTHIS_WEEK()と同じ値を指定することで、曜日を指定できます。引数を指定しない場合は、翌週のすべての日が対象です。
+                                    * 関数名: THIS_MONTH(数値またはフォーマット文字)
+                                      * 例: 作成日時 = THIS_MONTH()
+                                      * 説明: APIを実行した月引数に次の値を指定することで、日付を指定できます。LAST：月末1から31の数値：日付引数を指定しない場合は、月のすべての日が対象です。指定した日付が存在しない場合は、APIを実行した月の翌月1日で計算されます。
+                                    * 関数名: LAST_MONTH(数値またはフォーマット文字)
+                                      * 例: 作成日時 = LAST_MONTH()
+                                      * 説明: APIを実行した月の前月引数に次の値を指定することで、日付を指定できます。LAST：前月末1から31の数値：前月の日付引数を指定しない場合は、月のすべての日が対象です。指定した日付が存在しない場合は、APIを実行した月の翌月1日で計算されます。
+                                    * 関数名: NEXT_MONTH(数値またはフォーマット文字)
+                                      * 例: 作成日時 = NEXT_MONTH()
+                                      * 説明: APIを実行した月の翌月引数に次の値を指定することで、日付を指定できます。LAST：翌月末1から31の数値：翌月の日付引数を指定しない場合は、月のすべての日が対象です。指定した日付が存在しない場合は、APIを実行した月の翌々月1日で計算されます。
+                                    * 関数名: THIS_YEAR()
+                                      * 例: 作成日時 = THIS_YEAR()
+                                      * 説明: APIを実行した年
+                                    * 関数名: LAST_YEAR()
+                                      * 例: 作成日時 = LAST_YEAR()
+                                      * 説明: APIを実行した年の前年
+                                    * 関数名: NEXT_YEAR()
+                                      * 例: 日時 = NEXT_YEAR()
+                                      * 説明: APIを実行した年の翌年
+
+                                    * オプション: order by
+                                      * 例: order by 更新日時asc
+                                      * 説明: レコードを取得する順番本オプションに続けて指定したフィールドコードの値で並び替えられます。フィールドコードの後にascを指定すると昇順、descを指定すると降順で並び替えられます。複数の項目で並び替える場合、「フィールドコード 並び順」をカンマ区切りで指定します。例：order by フィールドコード1 desc, フィールドコード2 asc省略すると、レコードIDの降順で並び替えされます。order byで指定できるフィールドには制限があります。詳細は次のページを参照してください。        ソートで選択できるフィールド
+                                    * オプション: limit
+                                      * 例: limit 20
+                                      * 説明: 取得するレコード数たとえばlimit 20を指定すると、レコード先頭から20件のレコードを取得します。0から500までの数値を指定できます。省略すると、100が設定されます。
+                                    * オプション: offset
+                                      * 例: offset 30
+                                      * 説明: 取得をスキップするレコード数たとえばoffset 30を指定すると、レコード先頭から30番目までのレコードは取得せず、31番目のレコードから取得します。0から10,000までの数値を指定できます。省略すると、0が設定されます。
+
+                                    #### フィールド、システム識別子ごとの利用可能な演算子と関数一覧
+
+                                    固定リンクがコピーされました
+
+                                    * フィールドまたはシステム識別子: レコード番号
+                                      * = != > < >= <= innot in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: $id
+                                      * = != > < >= <= in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 作成者
+                                      * in not in
+                                      * 利用可能な関数: LOGINUSER()
+                                    * フィールドまたはシステム識別子: 作成日時
+                                      * = != > < >= <=
+                                      * 利用可能な関数: NOW() TODAY() YESTERDAY() TOMORROW() FROM_TODAY() THIS_WEEK() LAST_WEEK() NEXT_WEEK() THIS_MONTH() LAST_MONTH() NEXT_MONTH() THIS_YEAR() LAST_YEAR() NEXT_YEAR()
+                                    * フィールドまたはシステム識別子: 更新者
+                                      * in not in
+                                      * 利用可能な関数: LOGINUSER()
+                                    * フィールドまたはシステム識別子: 更新日時
+                                      * = != > < >= <=
+                                      * 利用可能な関数: NOW() TODAY() YESTERDAY() TOMORROW() FROM_TODAY() THIS_WEEK() LAST_WEEK() NEXT_WEEK() THIS_MONTH() LAST_MONTH() NEXT_MONTH() THIS_YEAR() LAST_YEAR() NEXT_YEAR()
+                                    * フィールドまたはシステム識別子: 文字列（1行）
+                                      * = != in not in like not like
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: リンク
+                                      * = != in not in like not like
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 数値
+                                      * = != > < >= <= in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 計算
+                                      * = != > < >= <= in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 文字列（複数行）
+                                      * like not like
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: リッチエディター
+                                      * like not like
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: チェックボックス
+                                      * in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: ラジオボタン
+                                      * in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: ドロップダウン
+                                      * in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 複数選択
+                                      * in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 添付ファイル
+                                      * like not like
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 日付
+                                      * = != > < >= <=
+                                      * 利用可能な関数: TODAY() YESTERDAY() TOMORROW() FROM_TODAY() THIS_WEEK() LAST_WEEK() NEXT_WEEK() THIS_MONTH() LAST_MONTH() NEXT_MONTH() THIS_YEAR() LAST_YEAR() NEXT_YEAR()
+                                    * フィールドまたはシステム識別子: 時刻
+                                      * = != > < >= <=
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: 日時
+                                      * = != > < >= <=
+                                      * 利用可能な関数: NOW() TODAY() YESTERDAY() TOMORROW() FROM_TODAY() THIS_WEEK() LAST_WEEK() NEXT_WEEK() THIS_MONTH() LAST_MONTH() NEXT_MONTH() THIS_YEAR() LAST_YEAR() NEXT_YEAR()
+                                    * フィールドまたはシステム識別子: ユーザー選択
+                                      * in not in
+                                      * 利用可能な関数: LOGINUSER()
+                                    * フィールドまたはシステム識別子: 組織選択
+                                      * in not in
+                                      * 利用可能な関数: PRIMARY_ORGANIZATION()
+                                    * フィールドまたはシステム識別子: グループ選択
+                                      * in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: ステータス
+                                      * = != in not in
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: ルックアップ
+                                      * ルックアップ元のフィールドタイプと同じ
+                                      * 利用可能な関数: ルックアップ元のフィールドタイプと同じ
+                                    * フィールドまたはシステム識別子: 関連レコード
+                                      * 参照するアプリのフィールドタイプと同じ
+                                      * 利用可能な関数: 参照するアプリのフィールドタイプと同じ
+                                    * フィールドまたはシステム識別子: グループ
+                                      * なし
+                                      * 利用可能な関数: なし
+                                    * フィールドまたはシステム識別子: カテゴリー
+                                      * なし
+                                      * 利用可能な関数: なし
+
+                                    次のフィールドの値に、ダブルクオートやバックスラッシュを含む場合、エスケープが必要です。
+
+                                    *   文字列（1行）
+                                    *   文字列（複数行）
+                                    *   リッチエディター
+                                    *   チェックボックス
+                                    *   ラジオボタン
+                                    *   ドロップダウン
+                                    *   複数選択
+                                    *   ステータス
+                                  `,
+                                },
+                                sort: {
+                                  type: "string",
+                                },
+                                revision: {
+                                  type: "number"
+                                },
+                              },
+                              required: [
+                                "index",
+                                "type",
+                                "name",
+                                "fields",
+                                "date",
+                                "title",
+                                "html",
+                                "pager",
+                                "device",
+                                "filterCond",
+                                "sort",
+                                "revision",
+                              ],
+                              additionalProperties: false
+                            }
+                          },
+                        },
+                        required: ["title", "description", "views"],
+                        additionalProperties: false
+                    //   }
+                    // ]
+                  }
+                },
+                required: ["suggestedList"],
+                additionalProperties: false
+              }
+            }
+          }
+        })
+      });
+
+      const newLLMData = await newLLM.json();
+      console.log('=======>>>>>>>>>>>>>>>>>>>>>>>>>>>', newLLMData.choices[0].message.content);
+      console.log('=======>>>>>>>>>>>>>>>>>>>>>>>>>>>', JSON.parse(newLLMData.choices[0].message.content));
+
       let searchResult = ""
 
       if(res) {
